@@ -1,5 +1,7 @@
 package com.jcodecraeer.xrecyclerview;
 
+import java.util.ArrayList;
+
 import android.content.Context;
 import android.support.v7.widget.GridLayoutManager;
 import android.support.v7.widget.LinearLayoutManager;
@@ -10,9 +12,6 @@ import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.Adapter;
-
-import java.util.ArrayList;
 
 public class XRecyclerView extends RecyclerView {
 
@@ -37,6 +36,8 @@ public class XRecyclerView extends RecyclerView {
     private static final int TYPE_FOOTER =  -3;
     private int previousTotal = 0;
     private int mPageCount = 0;
+    //adapter没有数据的时候显示,类似于listView的emptyView
+    private View mEmptyView;
 
     public XRecyclerView(Context context) {
         this(context, null);
@@ -152,12 +153,22 @@ public class XRecyclerView extends RecyclerView {
         }
     }
 
+    public void setEmptyView(View emptyView) {
+        this.mEmptyView = emptyView;
+        mDataObserver.onChanged();
+    }
+
+    public View getEmptyView() {
+        return mEmptyView;
+    }
+
     @Override
     public void setAdapter(Adapter adapter) {
         mAdapter  = adapter;
         mWrapAdapter = new WrapAdapter(mHeaderViews, mFootViews, adapter);
         super.setAdapter(mWrapAdapter);
         mAdapter.registerAdapterDataObserver(mDataObserver);
+        mDataObserver.onChanged();
     }
 
     @Override
@@ -279,7 +290,26 @@ public class XRecyclerView extends RecyclerView {
     private final RecyclerView.AdapterDataObserver mDataObserver = new RecyclerView.AdapterDataObserver() {
         @Override
         public void onChanged() {
-            mWrapAdapter.notifyDataSetChanged();
+            Adapter<?> adapter = getAdapter();
+            if (adapter != null && mEmptyView != null) {
+                int emptyCount = 0;
+                if (pullRefreshEnabled) {
+                    emptyCount++;
+                }
+                if (loadingMoreEnabled) {
+                    emptyCount++;
+                }
+                if (adapter.getItemCount() == emptyCount) {
+                    mEmptyView.setVisibility(View.VISIBLE);
+                    XRecyclerView.this.setVisibility(View.GONE);
+                } else {
+                    mEmptyView.setVisibility(View.GONE);
+                    XRecyclerView.this.setVisibility(View.VISIBLE);
+                }
+            }
+            if (mWrapAdapter != null) {
+                mWrapAdapter.notifyDataSetChanged();
+            }
         }
 
         @Override
@@ -420,7 +450,7 @@ public class XRecyclerView extends RecyclerView {
             if(isFooter(position)){
                 return TYPE_FOOTER;
             }
-            int adjPosition = position - getHeadersCount();;
+            int adjPosition = position - getHeadersCount();
             int adapterCount;
             if (adapter != null) {
                 adapterCount = adapter.getItemCount();
@@ -473,5 +503,15 @@ public class XRecyclerView extends RecyclerView {
         void onRefresh();
 
         void onLoadMore();
+    }
+    
+    public void setRefreshing(boolean refreshing) {
+        if (refreshing && pullRefreshEnabled && mLoadingListener != null) {
+            mRefreshHeader.setState(ArrowRefreshHeader.STATE_REFRESHING);
+            mRefreshHeader.onMove(mRefreshHeader.getMeasuredHeight());
+            mLoadingListener.onRefresh();
+            isnomore = false;
+            previousTotal = 0;
+        }
     }
 }
